@@ -7,3 +7,6 @@ mkbootimage
 *.o
 *.vim
 tags
+.idea
+compile_commands.json
+.vs
