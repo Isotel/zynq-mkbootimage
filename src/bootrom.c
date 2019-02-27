@@ -232,6 +232,9 @@ int create_boot_image(uint32_t *img_ptr,
   uint32_t img_size;
 
   bootrom_img_hdr_tab_t img_hdr_tab;
+  if(bif_cfg->flags & BIF_CFG_VERBOSE) {
+    printf("\ncalc off\tconf off\tfile name\n");
+  }
 
   img_hdr_tab.hdrs_count = 0;
   for (i = 0; i < bif_cfg->nodes_num; i++) {
@@ -295,6 +298,11 @@ int create_boot_image(uint32_t *img_ptr,
         memset(offs.coff, 0xFF, sizeof(uint32_t));
         offs.coff++;
       }
+    }
+
+    if(bif_cfg->flags & BIF_CFG_VERBOSE) {
+        printf("%08lx\t%08x\t%s\n", (offs.coff - offs.img_ptr) * 4,
+               bif_cfg->nodes[i].offset, bif_cfg->nodes[i].fname);
     }
 
     /* Append file content to memory */

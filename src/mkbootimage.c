@@ -41,12 +41,16 @@ static char args_doc[] = "[--zynqmp|-u] <input_bif_file> <output_bin_file>";
 
 static struct argp_option argp_options[] = {
   {"zynqmp", 'u', 0, 0, "Generate files for ZyqnMP (default is Zynq)", 0},
+  {"nosort", 'n', 0, 0, "do not sort nodes by offset (default is sort)", 0},
+  {"verbose", 'v', 0, 0, "verbose (default is not verbose)", 0},
   { 0 }
 };
 
 /* Prapare struct for holding parsed arguments */
 struct arguments {
   uint8_t zynqmp;
+  uint8_t no_sort;
+  uint8_t verbose;
   char *bif_filename;
   char *bin_filename;
 };
@@ -59,6 +63,12 @@ static error_t argp_parser(int key, char *arg, struct argp_state *state) {
   case 'u':
     arguments->zynqmp = 0xFF;
     break;
+  case 'n':
+      arguments->no_sort = 0xFF;
+      break;
+  case 'v':
+      arguments->verbose = 0xFF;
+      break;
   case ARGP_KEY_ARG:
     switch(state->arg_num) {
     case 0:
@@ -98,6 +108,8 @@ int main(int argc, char *argv[]) {
 
   /* Init non-string arguments */
   arguments.zynqmp = 0;
+  arguments.no_sort = 0;
+  arguments.verbose = 0;
 
   /* Parse program arguments */
   argp_parse(&argp, argc, argv, 0, 0, &arguments);
@@ -109,6 +121,8 @@ int main(int argc, char *argv[]) {
 
   /* Give bif parser the info about arch */
   cfg.arch = (arguments.zynqmp) ? BIF_ARCH_ZYNQMP : BIF_ARCH_ZYNQ;
+  cfg.flags |= arguments.no_sort ? BIF_CFG_NO_SORT_BY_OFFSET : 0;
+  cfg.flags |= arguments.verbose ? BIF_CFG_VERBOSE : 0;
   bops = (arguments.zynqmp) ? &zynqmp_bops : &zynq_bops;
 
   ret = parse_bif(arguments.bif_filename, &cfg);

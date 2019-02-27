@@ -34,6 +34,7 @@
 
 int init_bif_cfg(bif_cfg_t *cfg) {
   /* Initially setup 8 nodes */
+  cfg->flags = 0;
   cfg->nodes_num = 0;
   cfg->nodes_avail = 8;
 
@@ -55,156 +56,7 @@ int deinit_bif_cfg(bif_cfg_t *cfg) {
   return BIF_SUCCESS;
 }
 
-int parse_bif(const char* fname, bif_cfg_t *cfg) {
-  FILE *bif_file;
-  int bif_size;
-  char *bif_content;
-  pcre *re;
-
-  if (!(bif_file = fopen(fname, "r"))) {
-    return BIF_ERROR_NOFILE;
-  }
-
-  /* Find file size */
-  fseek(bif_file, 0, SEEK_END);
-  bif_size = ftell(bif_file);
-  fseek(bif_file, 0, SEEK_SET);
-
-  /* allocate memory and read the whole file */
-  bif_content = malloc(bif_size + 1);
-  if (!bif_content) {
-    return -ENOMEM;
-  }
-  fread(bif_content, bif_size, 1, bif_file);
-
-  /* Find the beginning and the end */
-  char *beg;
-  char *end;
-
-  beg = strchr(bif_content, '{');
-  end = strchr(bif_content, '}');
-
-  /* Check if correct */
-  if (end == 0 || beg == 0 || beg >= end) {
-    return BIF_ERROR_PARSER;
-  }
-
-  /* extract the actual config */
-  char *bif_cfg = malloc(sizeof *bif_cfg * (end-beg));
-  if (!bif_cfg) {
-    free(bif_content);
-    return -ENOMEM;
-  }
-  memcpy(bif_cfg, beg+1, end-beg-1);
-  bif_cfg[end - beg - 1] = '\0';
-
-  /* First extract the name and the parameter group if exists */
-  char *pcre_regex = "\\s*(\\[(.*)\\])?\\s*([-/ a-zA-Z._0-9]+)";
-  const char *pcre_err;
-  int pcre_err_off;
-  re = pcre_compile(pcre_regex, 0, &pcre_err, &pcre_err_off, NULL);
-
-  if (re == NULL) {
-    return BIF_ERROR_PARSER;
-  }
-
-  /* Attributes regex */
-  pcre *re_attr;
-  char *pcre_attr_regex = "((\\w+)\\s*=\\s*([\\w-]+))+";
-  re_attr = pcre_compile(pcre_attr_regex, 0, &pcre_err, &pcre_err_off, NULL);
-
-  /* TODO cleanup */
-  int ret;
-  int attr_ret;
-  int ovec[30];
-  int soff=0;
-  int iovec[30];
-  int isoff=0;
-  char cattr[500];
-  char pattr_n[500];
-  char pattr_v[500];
-
-  bif_node_t node;
-
-  do {
-    /* Clean up node */
-    strcpy(node.fname, "");
-    node.offset = 0;
-    node.load = 0;
-    node.bootloader = 0;
-    node.fsbl_config = 0;
-    node.partition_owner = OWNER_FSBL;
-    node.pmufw_image = 0;
-    node.destination_device = DST_DEV_UNDEF;
-    node.destination_cpu = DST_CPU_UNDEF;
-    node.exception_level = EL_UNDEF;
-    node.is_file = 1;
-
-    ret = pcre_exec(re, NULL, bif_cfg, strlen(bif_cfg), soff, 0, ovec, 30);
-    if (ret < 4) {
-      /* no more nodes */
-      break;
-    }
-
-    /* parse attributes */
-    memcpy(cattr, bif_cfg + ovec[4], ovec[5] - ovec[4]);
-    cattr[ovec[5] - ovec[4]] = '\0';
-
-    isoff = 0;
-    if (re_attr == NULL) {
-      return BIF_ERROR_PARSER;
-    }
-    int aret = 0;
-    do {
-      aret = pcre_exec(re_attr, NULL, cattr, strlen(cattr), isoff, 0, iovec, 30);
-      if (aret < 1 && isoff == 0 && strlen(cattr) > 0) {
-        attr_ret  = bif_node_set_attr(cfg, &node, cattr, NULL);
-
-        if (attr_ret != BIF_SUCCESS)
-          return attr_ret;
-        break;
-      }
-      int i;
-      for (i = 2; i < aret; i+=3) {
-        memcpy(pattr_n, cattr + iovec[i*2], iovec[2*i+1] - iovec[2*i]);
-        pattr_n[iovec[2*i+1] - iovec[2*i]] = '\0';
-
-        memcpy(pattr_v, cattr + iovec[(i+1)*2], iovec[2*(i+1)+1] - iovec[2*(i+1)]);
-        pattr_v[iovec[2*(i+1)+1] - iovec[2*(i+1)]] = '\0';
-
-        attr_ret = bif_node_set_attr(cfg, &node, pattr_n, pattr_v);
-
-        if (attr_ret != BIF_SUCCESS)
-          return attr_ret;
-      }
-      isoff = iovec[1];
-    } while (aret > 3);
-
-    /* set filename of the node */
-    if (ovec[7] - ovec[6] < PATH_MAX) {
-      memcpy(node.fname, bif_cfg + ovec[6], ovec[7] - ovec[6]);
-      node.fname[ovec[7] - ovec[6]] = '\0';
-    } else {
-      fprintf(stderr,
-              "File path too long, maximum supported on your system is %d",
-              PATH_MAX);
-      return BIF_ERROR_PARSER;
-    }
-
-    bif_cfg_add_node(cfg, &node);
-
-    soff = ovec[1];
-  } while (ret >3);
-
-
-  free(bif_cfg);
-  free(bif_content);
-  fclose(bif_file);
-
-  return BIF_SUCCESS;
-}
-
-int bif_node_set_attr(bif_cfg_t *cfg, bif_node_t *node, char *attr_name, char *value) {
+static int bif_node_set_attr(bif_cfg_t *cfg, bif_node_t *node, char *attr_name, char *value) {
   if (strcmp(attr_name, "bootloader") == 0) {
     node->bootloader = 0xFF;
     return BIF_SUCCESS;
@@ -303,49 +155,69 @@ int bif_node_set_attr(bif_cfg_t *cfg, bif_node_t *node, char *attr_name, char *v
   return BIF_ERROR_UNSUPPORTED_ATTR;
 }
 
-int bif_cfg_add_node(bif_cfg_t *cfg, bif_node_t *node) {
-  uint16_t pos;
+/**
+ * Move special nodes to the top
+ */
+static void bif_move_special_nodes_top(bif_cfg_t* cfg) {
+  uint16_t pos = cfg->nodes_num - (uint16_t) 1u;
   bif_node_t tmp_node;
 
-  /* Check if initialized */
-  if (cfg->nodes_avail == 0) {
-    return BIF_ERROR_UNINITIALIZED;
-  }
-
-  pos = cfg->nodes_num;
-  cfg->nodes[pos] = *node;
-
-  /* Move nodes without offset to the top */
-  while (pos >= 1 && cfg->nodes[pos - 1].offset && !cfg->nodes[pos].offset) {
-    tmp_node = cfg->nodes[pos - 1];
-    cfg->nodes[pos - 1] = cfg->nodes[pos];
-    cfg->nodes[pos] = tmp_node;
-    pos--;
-  }
-
-  pos = cfg->nodes_num;
-
-  /* Move special nodes to the top as well */
   while (pos && (cfg->nodes[pos].fsbl_config || cfg->nodes[pos].pmufw_image)) {
     tmp_node = cfg->nodes[pos - 1];
     cfg->nodes[pos - 1] = cfg->nodes[pos];
     cfg->nodes[pos] = tmp_node;
     pos--;
   }
+}
 
-  pos = cfg->nodes_num;
+/**
+ * Move nodes without offset to the top
+ */
+static void bif_move_nodes_without_offset_top(bif_cfg_t* cfg) {
+  uint16_t pos = cfg->nodes_num - (uint16_t) 1u;
+  bif_node_t tmp_node;
 
-  /* Sort nodes via offset */
+  while (pos >= 1 && cfg->nodes[pos - 1].offset && !cfg->nodes[pos].offset) {
+    tmp_node = cfg->nodes[pos - 1];
+    cfg->nodes[pos - 1] = cfg->nodes[pos];
+    cfg->nodes[pos] = tmp_node;
+    pos--;
+  }
+}
+
+/**
+ * Sort nodes by offset
+ */
+static void bif_sort_nodes_by_offset(bif_cfg_t* cfg) {
+  uint16_t pos = cfg->nodes_num - (uint16_t) 1u;
+  bif_node_t tmp_node;
+
   while (pos >= 1 && cfg->nodes[pos - 1].offset > cfg->nodes[pos].offset) {
     tmp_node = cfg->nodes[pos - 1];
     cfg->nodes[pos - 1] = cfg->nodes[pos];
     cfg->nodes[pos] = tmp_node;
     pos--;
   }
+}
 
-  (cfg->nodes_num)++;
+static int bif_cfg_add_node(bif_cfg_t *cfg, bif_node_t *node) {
+  /* Check if initialized */
+  if (cfg->nodes_avail == 0) {
+    return BIF_ERROR_UNINITIALIZED;
+  }
 
-  /* Allocate more space if needed */
+  cfg->nodes[cfg->nodes_num++] = *node;
+
+    if(cfg->arch == BIF_ARCH_ZYNQMP) {
+        bif_move_special_nodes_top(cfg);
+    }
+
+    if((cfg->flags & BIF_CFG_NO_SORT_BY_OFFSET) == 0) {
+        bif_move_nodes_without_offset_top(cfg);
+        bif_sort_nodes_by_offset(cfg);
+    }
+
+    /* Allocate more space if needed */
   if (cfg->nodes_num >= cfg->nodes_avail) {
     cfg->nodes_avail *= 2;
     cfg->nodes = realloc(cfg->nodes, sizeof (bif_node_t) * cfg->nodes_avail);
@@ -353,5 +225,158 @@ int bif_cfg_add_node(bif_cfg_t *cfg, bif_node_t *node) {
       return -ENOMEM;
     }
   }
+  return BIF_SUCCESS;
+}
+
+int parse_bif(const char* fname, bif_cfg_t *cfg) {
+  FILE *bif_file;
+  int bif_size;
+  char *bif_content;
+  pcre *re;
+
+  if (!(bif_file = fopen(fname, "r"))) {
+    return BIF_ERROR_NOFILE;
+  }
+
+  /* Find file size */
+  fseek(bif_file, 0, SEEK_END);
+  bif_size = ftell(bif_file);
+  fseek(bif_file, 0, SEEK_SET);
+
+  /* allocate memory and read the whole file */
+  bif_content = malloc(bif_size + 1);
+  if (!bif_content) {
+    return -ENOMEM;
+  }
+  fread(bif_content, bif_size, 1, bif_file);
+
+  /* Find the beginning and the end */
+  char *beg;
+  char *end;
+
+  beg = strchr(bif_content, '{');
+  end = strchr(bif_content, '}');
+
+  /* Check if correct */
+  if (end == 0 || beg == 0 || beg >= end) {
+    return BIF_ERROR_PARSER;
+  }
+
+  /* extract the actual config */
+  char* bif_cfg = malloc(sizeof *bif_cfg * (end - beg));
+  if (!bif_cfg) {
+    free(bif_content);
+    return -ENOMEM;
+  }
+  memcpy(bif_cfg, beg + 1, end - beg - 1);
+  bif_cfg[end - beg - 1] = '\0';
+
+  /* First extract the name and the parameter group if exists */
+  char *pcre_regex = "\\s*(\\[(.*)\\])?\\s*([-/ a-zA-Z._0-9]+)";
+  const char *pcre_err;
+  int pcre_err_off;
+  re = pcre_compile(pcre_regex, 0, &pcre_err, &pcre_err_off, NULL);
+
+  if (re == NULL) {
+    return BIF_ERROR_PARSER;
+  }
+
+  /* Attributes regex */
+  pcre* re_attr;
+  char* pcre_attr_regex = "((\\w+)\\s*=\\s*([\\w-]+))+";
+  re_attr = pcre_compile(pcre_attr_regex, 0, &pcre_err, &pcre_err_off, NULL);
+
+  /* TODO cleanup */
+  int ret;
+  int attr_ret;
+  int ovec[30];
+  int soff = 0;
+  int iovec[30];
+  int isoff = 0;
+  char cattr[500];
+  char pattr_n[500];
+  char pattr_v[500];
+
+  bif_node_t node;
+
+  do {
+    /* Clean up node */
+    strcpy(node.fname, "");
+    node.offset = 0;
+    node.load = 0;
+    node.bootloader = 0;
+    node.fsbl_config = 0;
+    node.partition_owner = OWNER_FSBL;
+    node.pmufw_image = 0;
+    node.destination_device = DST_DEV_UNDEF;
+    node.destination_cpu = DST_CPU_UNDEF;
+    node.exception_level = EL_UNDEF;
+    node.is_file = 1;
+
+    ret = pcre_exec(re, NULL, bif_cfg, strlen(bif_cfg), soff, 0, ovec, 30);
+    if (ret < 4) {
+      /* no more nodes */
+      break;
+    }
+
+    /* parse attributes */
+    memcpy(cattr, bif_cfg + ovec[4], ovec[5] - ovec[4]);
+    cattr[ovec[5] - ovec[4]] = '\0';
+
+    isoff = 0;
+    if (re_attr == NULL) {
+      return BIF_ERROR_PARSER;
+    }
+    int aret = 0;
+    do {
+      aret = pcre_exec(re_attr, NULL, cattr, strlen(cattr), isoff, 0, iovec, 30);
+      if (aret < 1 && isoff == 0 && strlen(cattr) > 0) {
+        attr_ret = bif_node_set_attr(cfg, &node, cattr, NULL);
+
+        if (attr_ret != BIF_SUCCESS)
+          return attr_ret;
+        break;
+      }
+      int i;
+      for (i = 2; i < aret; i += 3) {
+        memcpy(pattr_n, cattr + iovec[i * 2], iovec[2 * i + 1] - iovec[2 * i]);
+        pattr_n[iovec[2 * i + 1] - iovec[2 * i]] = '\0';
+
+        memcpy(pattr_v, cattr + iovec[(i + 1) * 2], iovec[2 * (i + 1) + 1] - iovec[2 * (i + 1)]);
+        pattr_v[iovec[2 * (i + 1) + 1] - iovec[2 * (i + 1)]] = '\0';
+
+        attr_ret = bif_node_set_attr(cfg, &node, pattr_n, pattr_v);
+
+        if (attr_ret != BIF_SUCCESS)
+          return attr_ret;
+      }
+      isoff = iovec[1];
+    } while (aret > 3);
+
+    /* set filename of the node */
+    if (ovec[7] - ovec[6] < PATH_MAX) {
+      memcpy(node.fname, bif_cfg + ovec[6], ovec[7] - ovec[6]);
+      node.fname[ovec[7] - ovec[6]] = '\0';
+    } else {
+      fprintf(stderr,
+              "File path too long, maximum supported on your system is %d",
+              PATH_MAX);
+      return BIF_ERROR_PARSER;
+    }
+
+    bif_cfg_add_node(cfg, &node);
+
+    soff = ovec[1];
+  } while (ret > 3);
+
+  if (cfg->nodes_num == 0) {
+    fprintf(stderr, "No nodes found in file %s", fname);
+    return BIF_ERROR_PARSER;
+  }
+
+  free(bif_cfg);
+  free(bif_content);
+  fclose(bif_file);
+
   return BIF_SUCCESS;
 }

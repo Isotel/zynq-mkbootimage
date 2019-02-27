@@ -13,8 +13,11 @@
 #define BIF_ERROR_UNINITIALIZED    4
 #define BIF_ERROR_UNSUPPORTED_VAL  5
 
-#define BIF_ARCH_ZYNQ              (1 << 0)
-#define BIF_ARCH_ZYNQMP            (1 << 1)
+#define BIF_ARCH_ZYNQ              ((uint8_t) 1 << 0)
+#define BIF_ARCH_ZYNQMP            ((uint8_t) 1 << 1)
+
+#define BIF_CFG_NO_SORT_BY_OFFSET  ((uint8_t) 1 << 0)
+#define BIF_CFG_VERBOSE            ((uint8_t) 1 << 7)
 
 typedef enum partition_owner_e {
   OWNER_FSBL,
@@ -69,6 +72,7 @@ typedef struct bif_node_t {
 
 typedef struct bif_cfg_t {
   uint8_t arch;
+  uint8_t flags;
 
   uint16_t nodes_num;
   uint16_t nodes_avail;
@@ -78,8 +82,6 @@ typedef struct bif_cfg_t {
 
 int init_bif_cfg(bif_cfg_t *cfg);
 int deinit_bif_cfg(bif_cfg_t *cfg);
-int bif_cfg_add_node(bif_cfg_t *cfg, bif_node_t *node);
-int bif_node_set_attr(bif_cfg_t *cfg, bif_node_t *node, char *attr_name, char *value);
 int parse_bif(const char* fname, bif_cfg_t *cfg);
 
 #endif /* BIF_PARSER_H */
