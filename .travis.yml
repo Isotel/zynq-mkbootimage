@@ -9,10 +9,10 @@ git:
 
 env:
   matrix:
-    - BUILD=Debug    CC=gcc
-    - BUILD=Release  CC=gcc
-    - BUILD=Debug    CC=clang
-    - BUILD=Release  CC=clang
+    - BUILD=Debug    BUILD_CC=gcc
+    - BUILD=Release  BUILD_CC=gcc
+    - BUILD=Debug    BUILD_CC=clang
+    - BUILD=Release  BUILD_CC=clang
 
 script:
   - |
@@ -20,5 +20,5 @@ script:
     rm -rf build
     mkdir build
     cd build
-    cmake -DCMAKE_BUILD_TYPE=$BUILD ..
+    cmake -DCMAKE_C_COMPILER=$BUILD_CC -DCMAKE_BUILD_TYPE=$BUILD ..
     make
