@@ -1,0 +1,24 @@
+dist: xenial
+
+language: c
+os:
+  - linux
+
+git:
+  depth: 3
+
+env:
+  matrix:
+    - BUILD=Debug    CC=gcc
+    - BUILD=Release  CC=gcc
+    - BUILD=Debug    CC=clang
+    - BUILD=Release  CC=clang
+
+script:
+  - |
+    cd $TRAVIS_BUILD_DIR
+    rm -rf build
+    mkdir build
+    cd build
+    cmake -DCMAKE_BUILD_TYPE=$BUILD ..
+    make
