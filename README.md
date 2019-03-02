@@ -2,6 +2,8 @@
 
 (c) 2015-2018 [Antmicro](https://antmicro.com)
 
+[![Build Status](https://travis-ci.org/Isotel/zynq-mkbootimage.svg?branch=master)](https://travis-ci.org/Isotel/zynq-mkbootimage)
+
 This is an open-source replacement for the Xilinx `bootgen` application.
 It parses a `.bif` file and creates a Zynq boot image in the `.bin` format.
 
