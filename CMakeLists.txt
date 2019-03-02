@@ -26,8 +26,8 @@ add_executable(mkbootimage
         src/file/bitstream.c src/file/elf.c
         src/bif.c src/bootrom.c src/common.c src/mkbootimage.c)
 
-target_compile_options(mkbootimage PRIVATE $<$<C_COMPILER_ID:GNU>:-Wall -Werror>)
-target_compile_options(mkbootimage PRIVATE $<$<C_COMPILER_ID:Clang>:-Wall -Werror>)
+target_compile_options(mkbootimage PRIVATE $<$<C_COMPILER_ID:GNU>:-Wall -Werror -Wno-unused-result>)
+target_compile_options(mkbootimage PRIVATE $<$<C_COMPILER_ID:Clang>:-Wall -Werror -Wno-unused-result>)
 
 target_include_directories(mkbootimage PRIVATE
         "${PROJECT_SOURCE_DIR}/src")
