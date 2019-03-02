@@ -10,3 +10,4 @@ tags
 .idea
 compile_commands.json
 .vs
+cmake-build-*/
