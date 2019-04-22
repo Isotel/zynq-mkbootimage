@@ -78,6 +78,7 @@ typedef struct bif_cfg_t {
   uint16_t nodes_avail;
 
   bif_node_t *nodes;
+  const char *output_bitstream_filename;
 } bif_cfg_t;
 
 int init_bif_cfg(bif_cfg_t *cfg);

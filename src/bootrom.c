@@ -44,7 +44,8 @@
 /* Returns the offset by which the addr parameter should be moved
  * and partition header info via argument pointers.
  * The regular return value is the error code. */
-int append_file_to_image(uint32_t *addr,
+int append_file_to_image(bif_cfg_t *bif_cfg,
+                         uint32_t *addr,
                          bootrom_ops_t *bops,
                          bootrom_offs_t *offs,
                          bif_node_t node,
@@ -130,6 +131,16 @@ int append_file_to_image(uint32_t *addr,
 
     if (ret != BOOTROM_SUCCESS)
       return ret;
+
+    if(bif_cfg->output_bitstream_filename) {
+        FILE* ofile = fopen(bif_cfg->output_bitstream_filename, "wb");
+        if (ofile == NULL ) {
+            fprintf(stderr, "Could not open output file: %s\n", bif_cfg->output_bitstream_filename);
+            return -BOOTROM_ERROR_BITSTREAM;
+        }
+        fwrite(addr, *img_size, 1, ofile);
+        fclose(ofile);
+    }
 
     /* Init partition header */
     bops->init_part_hdr_bitstream(part_hdr, &node);
@@ -314,7 +325,8 @@ int create_boot_image(uint32_t *img_ptr,
       img_size = 0;
     }
 
-    ret = append_file_to_image(offs.coff,
+    ret = append_file_to_image(bif_cfg,
+                               offs.coff,
                                bops,
                                &offs,
                                bif_cfg->nodes[i],
